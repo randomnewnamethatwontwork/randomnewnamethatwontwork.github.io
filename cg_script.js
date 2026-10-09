@@ -3,7 +3,7 @@
 // ════════════════════════════════════════════════════════════════
 
 const GAS_DEPLOYMENT_ID =
-    "AKfycbxdvhMN2FQDrhvK8i-uktv3EEglqqvb_Y9oNvfHCqOmHvixrr3JNZ-GA6SZUO1mR7fu_g"
+    "AKfycbz33DWiLALJzf0NODsggrMHGHKtQM07eENKAGA89WmB6zSVmuWHYk-oluBNuh9BB9RJ"
 
 const APPS_SCRIPT_URL =
     `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
