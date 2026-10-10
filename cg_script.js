@@ -103,7 +103,7 @@ function init() {
 function loadEvents() {
     showLoading();
 
-    var url = APPS_SCRIPT_URL + '?action=cglist&t=' + Date.now();
+    var url = APPS_SCRIPT_URL + '?action=cglist';
 
     // ✅ CORS FIX: Use proxy for local development only
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -270,66 +270,89 @@ function renderBookBtn(ev) {
     var spots  = ev.spotsLeft;
     var isFull = spots <= 0;
 
-    var btnClass = isSel ? 'btn-booked' : (isFull ? 'btn-full' : 'btn-book');
-    var btnLabel = isSel ? '✓ Booked' : (isFull ? 'Full' : 'Book');
+    var cls, label, icon;
+    if      (isSel && isFull) { cls = 'selfull'; label = 'your booking - full'; icon = '&#10003;'; }
+    else if (isSel)           { cls = 'sel';     label = 'your booking';        icon = '&#10003;'; }
+    else if (isFull)          { cls = 'full';    label = 'no guides needed';    icon = '&#8211;'; }
+    else if (spots === 1)     { cls = 'partial'; label = '1 guide needed';      icon = '+'; }
+    else                      { cls = 'avail';   label = spots + ' guides needed'; icon = '+'; }
 
     var btn = document.createElement('button');
-    btn.className = 'book-btn ' + btnClass;
-    btn.textContent = btnLabel;
-    btn.disabled = isFull && !isSel;
+    btn.className = 'book-btn ' + cls;
+    btn.innerHTML =
+        '<span>' + (isSel ? 'Booked' : 'Book this') + '</span>' +
+        '<span style="display:flex;align-items:center;gap:8px">' +
+            '<span class="book-label">' + label + '</span>' +
+            '<span class="book-icon">' + icon + '</span>' +
+        '</span>';
 
-    btn.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        toggleBooking(ev.rowIndex, ev);
-    });
+    if (cls !== 'full') {
+        btn.addEventListener('click', (function(e) {
+            return function() { handleBook(e); };
+        })(ev));
+    }
 
     container.appendChild(btn);
 }
 
-function toggleBooking(idx, ev) {
-    if (selections[idx]) {
-        delete selections[idx];
+// ════════════════════════════════════════════════════════════════
+// INTERACTION
+// ════════════════════════════════════════════════════════════════
+
+function handleBook(ev) {
+    var isSel = !!selections[ev.rowIndex];
+
+    if (isSel) {
+        delete selections[ev.rowIndex];
         ev.spotsLeft++;
-        showToast('Removed', 'booked', idx, ev);
+        showToast('Removed ' + ev.school, ev.rowIndex, ev, 'removed');
     } else {
         if (ev.spotsLeft <= 0) return;
-        selections[idx] = ev;
+        selections[ev.rowIndex] = ev;
         ev.spotsLeft--;
-        showToast('Added', 'selected', idx, ev);
+        showToast('Booked ' + ev.school, ev.rowIndex, ev, 'booked');
     }
 
     renderBookBtn(ev);
     updateBadge();
 
-    if (typeof recordBookClickEvent === 'function') {
-        recordBookClickEvent();
+    if (typeof recordBookClickCount === 'function') {
+        var totalClicks = Object.keys(selections).length;
+        recordBookClickCount(totalClicks);
     }
 }
 
 function updateBadge() {
-    var count = Object.keys(selections).length;
-    var badge = document.getElementById('badge');
+    var total = Object.keys(selections).length;
+    document.getElementById('badge').textContent = total + ' selected';
+    document.getElementById('bottomBar').classList.toggle('show', total > 0);
 
-    if (badge) {
-        badge.textContent = count + ' selected';
+    if (typeof recordSelectionCount === 'function') {
+        recordSelectionCount(total);
     }
 }
 
-function showError(msg) {
-    var body = document.getElementById('appBody');
-    clearInterval(loadingMessageInterval);
+// ════════════════════════════════════════════════════════════════
+// CLEAR ALL
+// ════════════════════════════════════════════════════════════════
 
-    body.innerHTML =
-        '<div class="state-screen">' +
-            '<div class="state-title">Error loading events</div>' +
-            '<div class="state-sub">' + msg + '</div>' +
-        '</div>';
+document.getElementById('clearBtn').addEventListener('click', function() {
+    Object.keys(selections).forEach(function(idx) {
+        var ev = selections[idx];
+        ev.spotsLeft++;
+        renderBookBtn(ev);
+    });
+    selections = {};
+    lastAction = null;
+    document.getElementById('volComment').value = '';
+    updateBadge();
+});
 
-    document.getElementById('hdrValid').textContent = 'Error loading events';
-}
+// ════════════════════════════════════════════════════════════════
+// TOAST
+// ════════════════════════════════════════════════════════════════
 
-function showToast(msg, type, idx, ev) {
+function showToast(msg, idx, ev, type) {
     lastAction = { idx: idx, ev: ev, type: type };
 
     var toastLabel = document.getElementById('toastLabel');
