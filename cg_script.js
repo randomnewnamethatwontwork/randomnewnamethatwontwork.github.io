@@ -8,6 +8,7 @@ const GAS_DEPLOYMENT_ID =
 const APPS_SCRIPT_URL =
     `https://script.google.com/macros/s/${GAS_DEPLOYMENT_ID}/exec`;
 
+
 // ════════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════════
@@ -16,7 +17,8 @@ var allEvents  = [];
 var selections = {};
 var lastAction = null;
 var toastTimer = null;
-var loadingMessageInterval = 2.3;
+var loadingMessageInterval = null;
+var loadTimeoutId = null;
 
 // ════════════════════════════════════════════════════════════════
 // LOADING MESSAGES
@@ -33,7 +35,7 @@ var LOADING_MESSAGES = [
   'This is taking longer than expected, but we\'re on it...',
   'Your patience is admirable. Still loading...',
   'Almost there! The hamsters are running faster now...',
-  'Refreshing event data (silently, in the background)...',
+  'Refreshing event data (syncing to you now)...',
   'Updating from the latest schedule...',
   'Just another moment while we sync everything...',
   'Checking if any last-minute events opened up...',
@@ -54,10 +56,22 @@ function getRandomLoadingMessage() {
 function rotateLoadingMessage() {
   var msgElement = document.querySelector('.loading-message');
   if (!msgElement) {
-    clearInterval(loadingMessageInterval);
+    stopLoadingMessageRotation();
     return;
   }
   msgElement.textContent = getRandomLoadingMessage();
+}
+
+function startLoadingMessageRotation() {
+  stopLoadingMessageRotation(); // Always clear old one first
+  loadingMessageInterval = setInterval(rotateLoadingMessage, 2000);
+}
+
+function stopLoadingMessageRotation() {
+  if (loadingMessageInterval) {
+    clearInterval(loadingMessageInterval);
+    loadingMessageInterval = null;
+  }
 }
 
 function showLoading() {
@@ -73,10 +87,35 @@ function showLoading() {
       '<div class="loading-subtext">Syncing fresh event data...</div>' +
     '</div>';
 
-  // body.classList.add('loading');
+  startLoadingMessageRotation();
+}
 
-  clearInterval(loadingMessageInterval);
-  loadingMessageInterval = setInterval(rotateLoadingMessage, 2000);
+function showError(errorTitle, errorMessage, onRetry) {
+  var body = document.getElementById('appBody');
+  if (!body) return;
+
+  stopLoadingMessageRotation();
+
+  var retryButton = onRetry
+    ? '<button id="retryBtn" style="margin-top: 18px;">Try Again</button>'
+    : '';
+
+  body.innerHTML =
+    '<div class="state-screen">' +
+      '<div style="font-size: 32px; margin-bottom: 12px;">⚠️</div>' +
+      '<div style="font-weight: 600; margin-bottom: 8px; font-size: 16px;">' + errorTitle + '</div>' +
+      '<div style="color: var(--muted); margin-bottom: 18px; font-size: 14px; line-height: 1.6;">' + errorMessage + '</div>' +
+      retryButton +
+    '</div>';
+
+  if (onRetry) {
+    var retryBtn = document.getElementById('retryBtn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', onRetry);
+    }
+  }
+
+  document.getElementById('hdrValid').textContent = 'Error loading events';
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -97,19 +136,19 @@ function init() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// DATA LOADING WITH CACHING & CORS FIX
+// DATA LOADING WITH 10-SECOND TIMEOUT
 // ════════════════════════════════════════════════════════════════
 
 function loadEvents() {
     showLoading();
 
-    var url = APPS_SCRIPT_URL + '?action=cglist';
+    var url = APPS_SCRIPT_URL + '?action=cglist&t=' + Date.now(); // Cache bust
 
-    // ✅ CORS FIX: Use proxy for local development only
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        var urlWithoutProtocol = url.replace('https://', '').replace('http://', '');
-        url = 'https://cors-anywhere.herokuapp.com/' + urlWithoutProtocol;
-    }
+    // ✅ TIMEOUT: 10 seconds max
+    const controller = new AbortController();
+    loadTimeoutId = setTimeout(() => {
+      controller.abort();
+    }, 10000);
 
     const startTime = performance.now();
     const startTimestamp = new Date().toISOString();
@@ -118,9 +157,12 @@ function loadEvents() {
         recordEventsRequestStart();
     }
 
-    fetch(url)
+    fetch(url, { signal: controller.signal })
 
         .then(function(res) {
+
+            clearTimeout(loadTimeoutId);
+            loadTimeoutId = null;
 
             const duration = Math.round(
                 performance.now() - startTime
@@ -157,7 +199,11 @@ function loadEvents() {
         .then(function(json) {
 
             if (json.error) {
-                showError(json.error);
+                showError(
+                  'Could not load events',
+                  json.error,
+                  () => loadEvents()
+                );
                 return;
             }
 
@@ -172,6 +218,9 @@ function loadEvents() {
         })
 
         .catch(function(err) {
+
+            clearTimeout(loadTimeoutId);
+            loadTimeoutId = null;
 
             const duration = Math.round(
                 performance.now() - startTime
@@ -191,9 +240,20 @@ function loadEvents() {
                 recordEventsRequestEnd(0, err.message);
             }
 
-            showError(
-                'Could not load events. Check your connection and try again.'
-            );
+            // Distinguish between timeout and other errors
+            if (err.name === 'AbortError') {
+                showError(
+                  'Loading took too long',
+                  'Your internet connection might be slow. Check your connection and try again.',
+                  () => loadEvents()
+                );
+            } else {
+                showError(
+                  'Could not load events',
+                  'Check your internet connection and try again.',
+                  () => loadEvents()
+                );
+            }
 
             console.error(err);
         });
@@ -205,7 +265,7 @@ function loadEvents() {
 
 function renderList() {
     var body = document.getElementById('appBody');
-    clearInterval(loadingMessageInterval);
+    stopLoadingMessageRotation();
 
     if (allEvents.length === 0) {
         body.innerHTML =
@@ -270,89 +330,53 @@ function renderBookBtn(ev) {
     var spots  = ev.spotsLeft;
     var isFull = spots <= 0;
 
-    var cls, label, icon;
-    if      (isSel && isFull) { cls = 'selfull'; label = 'your booking - full'; icon = '&#10003;'; }
-    else if (isSel)           { cls = 'sel';     label = 'your booking';        icon = '&#10003;'; }
-    else if (isFull)          { cls = 'full';    label = 'no guides needed';    icon = '&#8211;'; }
-    else if (spots === 1)     { cls = 'partial'; label = '1 guide needed';      icon = '+'; }
-    else                      { cls = 'avail';   label = spots + ' guides needed'; icon = '+'; }
+    var btnClass = isSel ? 'btn-booked' : (isFull ? 'btn-full' : 'btn-book');
+    var btnLabel = isSel ? '✓ Booked' : (isFull ? 'Full' : 'Book');
 
     var btn = document.createElement('button');
-    btn.className = 'book-btn ' + cls;
-    btn.innerHTML =
-        '<span>' + (isSel ? 'Booked' : 'Book this') + '</span>' +
-        '<span style="display:flex;align-items:center;gap:8px">' +
-            '<span class="book-label">' + label + '</span>' +
-            '<span class="book-icon">' + icon + '</span>' +
-        '</span>';
+    btn.className = 'book-btn ' + btnClass;
+    btn.textContent = btnLabel;
+    btn.disabled = isFull && !isSel;
 
-    if (cls !== 'full') {
-        btn.addEventListener('click', (function(e) {
-            return function() { handleBook(e); };
-        })(ev));
-    }
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleBooking(ev.rowIndex, ev);
+    });
 
     container.appendChild(btn);
 }
 
-// ════════════════════════════════════════════════════════════════
-// INTERACTION
-// ════════════════════════════════════════════════════════════════
-
-function handleBook(ev) {
-    var isSel = !!selections[ev.rowIndex];
-
-    if (isSel) {
-        delete selections[ev.rowIndex];
+function toggleBooking(idx, ev) {
+    if (selections[idx]) {
+        delete selections[idx];
         ev.spotsLeft++;
-        showToast('Removed ' + ev.school, ev.rowIndex, ev, 'removed');
+        showToast('Removed', 'booked', idx, ev);
     } else {
         if (ev.spotsLeft <= 0) return;
-        selections[ev.rowIndex] = ev;
+        selections[idx] = ev;
         ev.spotsLeft--;
-        showToast('Booked ' + ev.school, ev.rowIndex, ev, 'booked');
+        showToast('Added', 'selected', idx, ev);
     }
 
     renderBookBtn(ev);
     updateBadge();
 
-    if (typeof recordBookClickCount === 'function') {
-        var totalClicks = Object.keys(selections).length;
-        recordBookClickCount(totalClicks);
+    if (typeof recordBookClickEvent === 'function') {
+        recordBookClickEvent();
     }
 }
 
 function updateBadge() {
-    var total = Object.keys(selections).length;
-    document.getElementById('badge').textContent = total + ' selected';
-    document.getElementById('bottomBar').classList.toggle('show', total > 0);
+    var count = Object.keys(selections).length;
+    var badge = document.getElementById('badge');
 
-    if (typeof recordSelectionCount === 'function') {
-        recordSelectionCount(total);
+    if (badge) {
+        badge.textContent = count + ' selected';
     }
 }
 
-// ════════════════════════════════════════════════════════════════
-// CLEAR ALL
-// ════════════════════════════════════════════════════════════════
-
-document.getElementById('clearBtn').addEventListener('click', function() {
-    Object.keys(selections).forEach(function(idx) {
-        var ev = selections[idx];
-        ev.spotsLeft++;
-        renderBookBtn(ev);
-    });
-    selections = {};
-    lastAction = null;
-    document.getElementById('volComment').value = '';
-    updateBadge();
-});
-
-// ════════════════════════════════════════════════════════════════
-// TOAST
-// ════════════════════════════════════════════════════════════════
-
-function showToast(msg, idx, ev, type) {
+function showToast(msg, type, idx, ev) {
     lastAction = { idx: idx, ev: ev, type: type };
 
     var toastLabel = document.getElementById('toastLabel');
@@ -623,5 +647,8 @@ document.getElementById('commentToggle').addEventListener('click', function() {
 // ════════════════════════════════════════════════════════════════
 // INITIALIZATION
 // ════════════════════════════════════════════════════════════════
+
+// Ensure loading stops on page unload
+window.addEventListener('beforeunload', stopLoadingMessageRotation);
 
 init();
