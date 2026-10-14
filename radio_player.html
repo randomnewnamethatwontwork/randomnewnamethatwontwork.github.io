@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AccuRadio 90s · Local</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --card: #1a1a21;
+      --card-hover: #24242e;
+      --text: #eee;
+      --muted: #9a9aaa;
+      --accent: #7c5cff;
+      --accent2: #ff6b9d;
+      --radius: 14px;
+      --player-h: 92px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: calc(var(--player-h) + 24px);
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(15,15,18,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid #2a2a35;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    header h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    header .status {
+      color: var(--muted);
+      font-size: 0.85rem;
+      flex: 1;
+    }
+
+    button {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    button:hover { background: var(--card-hover); border-color: var(--accent); }
+    button:disabled { opacity: 0.45; cursor: default; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      padding: 20px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
+      border: 1px solid transparent;
+      display: flex;
+      flex-direction: column;
+    }
+    .card:hover {
+      background: var(--card-hover);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .card.playing {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), 0 8px 28px rgba(124,92,255,0.25);
+    }
+
+    .card .art-wrap {
+      position: relative;
+      aspect-ratio: 1;
+      background: #111;
+      overflow: hidden;
+    }
+    .card .art-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .card .art-wrap .placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #444;
+      font-size: 2.5rem;
+    }
+    .card .playing-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.04em;
+      display: none;
+    }
+    .card.playing .playing-badge { display: block; }
+
+    .card .info {
+      padding: 12px 14px 14px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .card .station {
+      font-weight: 650;
+      font-size: 0.95rem;
+      line-height: 1.25;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .card .now {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 2.1em;
+    }
+    .card .now strong { color: #ccc; font-weight: 500; }
+    .card .loading-now {
+      color: #555;
+      font-style: italic;
+    }
+
+    /* Fixed player */
+    #player-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--player-h);
+      background: rgba(18,18,24,0.97);
+      backdrop-filter: blur(16px);
+      border-top: 1px solid #2e2e3a;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 20px;
+      z-index: 30;
+    }
+
+    #player-bar .cover {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #222;
+      flex-shrink: 0;
+    }
+    #player-bar .meta {
+      flex: 1;
+      min-width: 0;
+    }
+    #player-bar .track-title {
+      font-weight: 650;
+      font-size: 0.95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #player-bar .track-artist {
+      font-size: 0.8rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #player-bar .station-name {
+      font-size: 0.72rem;
+      color: var(--accent);
+      margin-top: 2px;
+    }
+
+    #player-bar .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    #player-bar .controls button {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      padding: 0;
+    }
+    #player-bar .controls #btn-play {
+      background: var(--accent);
+      border-color: var(--accent);
+      width: 48px;
+      height: 48px;
+      font-size: 1.25rem;
+    }
+    #player-bar .controls #btn-play:hover { filter: brightness(1.1); }
+
+    #progress-wrap {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: #2a2a35;
+    }
+    #progress {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width 0.25s linear;
+    }
+
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .empty-state.error { color: #ff7b7b; }
+
+    audio { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AccuRadio · 90s</h1>
+    <span class="status" id="status">Loading channels…</span>
+    <button id="btn-refresh" title="Refresh now-playing info">↻ Refresh</button>
+  </header>
+
+  <div class="grid" id="grid">
+    <div class="empty-state">Loading…</div>
+  </div>
+
+  <div id="player-bar">
+    <div id="progress-wrap"><div id="progress"></div></div>
+    <img class="cover" id="p-cover" src="" alt="" />
+    <div class="meta">
+      <div class="track-title" id="p-title">Nothing playing</div>
+      <div class="track-artist" id="p-artist">—</div>
+      <div class="station-name" id="p-station"></div>
+    </div>
+    <div class="controls">
+      <button id="btn-prev" title="Previous track" disabled>⏮</button>
+      <button id="btn-play" title="Play / Pause" disabled>▶</button>
+      <button id="btn-next" title="Next track" disabled>⏭</button>
+    </div>
+  </div>
+
+  <audio id="audio" preload="auto"></audio>
+
+  <script>
+    const GENRE_URL = "https://accuradio.com/c/m/json/genre/?param=nineties";
+    const PLAYLIST_URL = (id) => `https://accuradio.com/playlist/json/${id}/`;
+    const TILE_URL = (oldid) => `https://c2.accu.fm/tiles/default/${oldid}.jpg`;
+    const COVER_URL = (cdcover) =>
+      cdcover
+        ? `https://www.accuradio.com/static/images/covers300${cdcover}`
+        : "https://static.accuradio.com/static/images/2014/defaultTile.jpg";
+
+    const grid = document.getElementById("grid");
+    const statusEl = document.getElementById("status");
+    const audio = document.getElementById("audio");
+    const progress = document.getElementById("progress");
+
+    let channels = [];           // { id, name, oldid, description, now? }
+    let currentChannelId = null;
+    let playlist = [];           // cleaned tracks for current station
+    let trackIndex = 0;
+    let isPlaying = false;
+
+    // ---------- helpers ----------
+    function isAd(t) {
+      return t.ad_type != null || (t.title || "").toLowerCase() === "sweeper";
+    }
+
+    function trackUrl(t) {
+      if (!t.primary || !t.fn) return null;
+      return t.primary + t.fn + ".m4a";
+    }
+
+    function cleanTracks(raw) {
+      return (raw || [])
+        .filter((t) => !isAd(t) && trackUrl(t))
+        .map((t) => ({
+          title: t.title || "Unknown",
+          artist: t.track_artist || t.artist || "Unknown",
+          url: trackUrl(t),
+          cover: t.album && t.album.cdcover ? COVER_URL(t.album.cdcover) : null,
+          duration: t.duration ? parseInt(t.duration, 10) : null,
+        }));
+    }
+
+    async function fetchJson(url) {
+      const res = await fetch(url, {
+        headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    // ---------- load channels ----------
+    async function loadChannels() {
+      statusEl.textContent = "Loading channels…";
+      try {
+        const data = await fetchJson(GENRE_URL);
+        channels = (data.channels || []).map((c) => ({
+          id: c._id.$oid,
+          name: c.name,
+          oldid: c.oldid,
+          description: c.description || "",
+          now: null, // { title, artist, cover }
+        }));
+        renderGrid();
+        statusEl.textContent = `${channels.length} stations · fetching now-playing…`;
+        await refreshNowPlaying();
+        statusEl.textContent = `${channels.length} stations`;
+      } catch (e) {
+        console.error(e);
+        grid.innerHTML = `<div class="empty-state error">Failed to load channels.<br>${e.message}</div>`;
+        statusEl.textContent = "Error";
+      }
+    }
+
+    // ---------- now-playing for grid ----------
+    async function fetchNowForChannel(ch) {
+      try {
+        const raw = await fetchJson(PLAYLIST_URL(ch.id));
+        const tracks = cleanTracks(raw);
+        if (tracks.length) {
+          ch.now = {
+            title: tracks[0].title,
+            artist: tracks[0].artist,
+            cover: tracks[0].cover,
+          };
+        } else {
+          ch.now = null;
+        }
+      } catch (e) {
+        // leave now as-is
+      }
+    }
+
+    async function refreshNowPlaying() {
+      statusEl.textContent = `Refreshing now-playing (0/${channels.length})…`;
+      // concurrency limit ~6
+      const queue = [...channels];
+      let done = 0;
+      const workers = Array.from({ length: 6 }, async () => {
+        while (queue.length) {
+          const ch = queue.shift();
+          await fetchNowForChannel(ch);
+          done++;
+          statusEl.textContent = `Refreshing now-playing (${done}/${channels.length})…`;
+          updateCardNow(ch);
+        }
+      });
+      await Promise.all(workers);
+      statusEl.textContent = `${channels.length} stations · updated ${new Date().toLocaleTimeString()}`;
+    }
+
+    // ---------- render ----------
+    function renderGrid() {
+      if (!channels.length) {
+        grid.innerHTML = `<div class="empty-state">No channels found.</div>`;
+        return;
+      }
+      grid.innerHTML = "";
+      for (const ch of channels) {
+        const card = document.createElement("div");
+        card.className = "card" + (ch.id === currentChannelId ? " playing" : "");
+        card.dataset.id = ch.id;
+
+        const artSrc = ch.now?.cover || TILE_URL(ch.oldid);
+        card.innerHTML = `
+          <div class="art-wrap">
+            <img src="${artSrc}" alt="" loading="lazy"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />
+            <div class="placeholder" style="display:none">♪</div>
+            <span class="playing-badge">PLAYING</span>
+          </div>
+          <div class="info">
+            <div class="station">${escapeHtml(ch.name)}</div>
+            <div class="now ${ch.now ? "" : "loading-now"}" data-now>
+              ${ch.now
+                ? `<strong>${escapeHtml(ch.now.title)}</strong><br>${escapeHtml(ch.now.artist)}`
+                : "…"}
+            </div>
+          </div>
+        `;
+        card.addEventListener("click", () => playChannel(ch));
+        grid.appendChild(card);
+      }
+    }
+
+    function updateCardNow(ch) {
+      const card = grid.querySelector(`.card[data-id="${ch.id}"]`);
+      if (!card) return;
+      const nowEl = card.querySelector("[data-now]");
+      if (ch.now) {
+        nowEl.classList.remove("loading-now");
+        nowEl.innerHTML = `<strong>${escapeHtml(ch.now.title)}</strong><br>${escapeHtml(ch.now.artist)}`;
+        // also update art if we have a track cover
+        const img = card.querySelector(".art-wrap img");
+        if (ch.now.cover && img) {
+          img.src = ch.now.cover;
+          img.style.display = "";
+          img.nextElementSibling.style.display = "none";
+        }
+      }
+    }
+
+    function highlightPlaying() {
+      grid.querySelectorAll(".card").forEach((c) => {
+        c.classList.toggle("playing", c.dataset.id === currentChannelId);
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // ---------- playback ----------
+    async function playChannel(ch) {
+      currentChannelId = ch.id;
+      highlightPlaying();
+      statusEl.textContent = `Loading playlist for “${ch.name}”…`;
+
+      try {
+        const raw = await fetchJson(PLAYLIST_URL(ch.id));
+        playlist = cleanTracks(raw);
+        if (!playlist.length) {
+          statusEl.textContent = "No playable tracks in this playlist.";
+          return;
+        }
+        trackIndex = 0;
+        playTrack(0);
+        statusEl.textContent = `${channels.length} stations · ${ch.name}`;
+        // update this channel's "now" from the playlist we just got
+        ch.now = {
+          title: playlist[0].title,
+          artist: playlist[0].artist,
+          cover: playlist[0].cover,
+        };
+        updateCardNow(ch);
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent = `Failed to load playlist: ${e.message}`;
+      }
+    }
+
+    function playTrack(idx) {
+      if (idx < 0 || idx >= playlist.length) return;
+      trackIndex = idx;
+      const t = playlist[idx];
+      audio.src = t.url;
+      audio.play().catch((e) => console.warn("play failed", e));
+      isPlaying = true;
+      updatePlayerUI(t);
+      document.getElementById("btn-play").textContent = "⏸";
+      document.getElementById("btn-play").disabled = false;
+      document.getElementById("btn-prev").disabled = trackIndex <= 0;
+      document.getElementById("btn-next").disabled = false;
+    }
+
+    function updatePlayerUI(t) {
+      document.getElementById("p-title").textContent = t.title;
+      document.getElementById("p-artist").textContent = t.artist;
+      const ch = channels.find((c) => c.id === currentChannelId);
+      document.getElementById("p-station").textContent = ch ? ch.name : "";
+      const cover = document.getElementById("p-cover");
+      cover.src = t.cover || (ch ? TILE_URL(ch.oldid) : "");
+      cover.style.display = cover.src ? "block" : "none";
+    }
+
+    async function nextTrack() {
+      if (trackIndex + 1 < playlist.length) {
+        playTrack(trackIndex + 1);
+        return;
+      }
+      // end of batch → fetch a fresh playlist
+      const ch = channels.find((c) => c.id === currentChannelId);
+      if (!ch) return;
+      statusEl.textContent = "Fetching more tracks…";
+      try {
+        const raw = await fetchJson(PLAYLIST_URL(ch.id));
+        playlist = cleanTracks(raw);
+        if (playlist.length) {
+          playTrack(0);
+          statusEl.textContent = `${channels.length} stations · ${ch.name}`;
+        } else {
+          statusEl.textContent = "No more tracks.";
+          stopPlayback();
+        }
+      } catch (e) {
+        statusEl.textContent = "Could not fetch more tracks.";
+        stopPlayback();
+      }
+    }
+
+    function prevTrack() {
+      if (trackIndex > 0) playTrack(trackIndex - 1);
+    }
+
+    function stopPlayback() {
+      audio.pause();
+      isPlaying = false;
+      document.getElementById("btn-play").textContent = "▶";
+    }
+
+    function togglePlay() {
+      if (!audio.src) return;
+      if (audio.paused) {
+        audio.play();
+        isPlaying = true;
+        document.getElementById("btn-play").textContent = "⏸";
+      } else {
+        audio.pause();
+        isPlaying = false;
+        document.getElementById("btn-play").textContent = "▶";
+      }
+    }
+
+    // ---------- audio events ----------
+    audio.addEventListener("timeupdate", () => {
+      if (!audio.duration) return;
+      progress.style.width = (audio.currentTime / audio.duration) * 100 + "%";
+    });
+    audio.addEventListener("ended", () => nextTrack());
+    audio.addEventListener("error", () => {
+      console.warn("audio error, skipping");
+      nextTrack();
+    });
+
+    // ---------- controls ----------
+    document.getElementById("btn-play").addEventListener("click", togglePlay);
+    document.getElementById("btn-next").addEventListener("click", nextTrack);
+    document.getElementById("btn-prev").addEventListener("click", prevTrack);
+    document.getElementById("btn-refresh").addEventListener("click", () => {
+      refreshNowPlaying();
+    });
+
+    // keyboard
+    document.addEventListener("keydown", (e) => {
+      if (e.target.tagName === "INPUT") return;
+      if (e.code === "Space") {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.code === "ArrowRight") nextTrack();
+      else if (e.code === "ArrowLeft") prevTrack();
+    });
+
+    // auto-refresh now-playing every 4 minutes
+    setInterval(refreshNowPlaying, 4 * 60 * 1000);
+
+    // start
+    loadChannels();
+  </script>
+</body>
+</html>
