@@ -891,7 +891,36 @@ textarea {
 
 
 /* ---------------------------------------------------------
-   24. ACCESSIBILITY
+   24. IMPORT/EXPORT BUTTONS
+   --------------------------------------------------------- */
+
+
+.data-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px 16px;
+    margin-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+.data-actions button {
+    min-width: 130px;
+}
+
+@media (max-width: 480px) {
+    .data-actions {
+        flex-direction: column;
+    }
+
+    .data-actions button {
+        width: 100%;
+    }
+}
+
+
+/* ---------------------------------------------------------
+   25. ACCESSIBILITY
    --------------------------------------------------------- */
 
 button:focus-visible,
