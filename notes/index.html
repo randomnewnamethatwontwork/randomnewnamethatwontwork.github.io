@@ -1,0 +1,316 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="theme-color" content="#111820">
+    <meta name="description" content="A simple, private daily diary and timeline.">
+
+    <title>Daily Log</title>
+
+    <link rel="manifest" href="manifest.webmanifest">
+<!--    <link rel="icon" type="image/svg+xml" href="icon.svg">-->
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="styles.css">
+
+</head>
+<body>
+
+    <div class="app-container">
+
+        <!-- APPLICATION HEADER -->
+        <header class="app-header">
+
+            <div class="header-title">
+                <h1>Daily Log</h1>
+                <p class="subtitle">Your personal timeline</p>
+            </div>
+
+            <div class="header-actions">
+
+                <button
+                    id="exportButton"
+                    class="secondary-button"
+                    type="button"
+                    title="Export all entries"
+                >
+                    Export
+                </button>
+
+                <button
+                    id="importButton"
+                    class="secondary-button"
+                    type="button"
+                    title="Import entries"
+                >
+                    Import
+                </button>
+
+                <input
+                    id="importFile"
+                    type="file"
+                    accept=".json,application/json"
+                    hidden
+                >
+
+            </div>
+
+        </header>
+
+
+        <!-- SEARCH -->
+        <section class="search-section">
+
+            <input
+                id="searchInput"
+                type="search"
+                placeholder="Search your notes..."
+                autocomplete="off"
+                spellcheck="false"
+            >
+
+            <button
+                id="clearSearchButton"
+                class="icon-button"
+                type="button"
+                aria-label="Clear search"
+                title="Clear search"
+            >
+                ×
+            </button>
+
+        </section>
+
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+
+            <!-- TIMELINE PANEL -->
+            <section class="timeline-panel">
+
+                <div class="section-header">
+
+                    <h2>Timeline</h2>
+
+                    <label class="toggle-control">
+                        <input
+                            type="checkbox"
+                            id="hideBlankDays"
+                        >
+                        <span>Hide blank days</span>
+                    </label>
+
+                </div>
+
+
+                <!-- DATE NAVIGATION -->
+                <div class="date-navigation">
+
+                    <button
+                        id="previousDateButton"
+                        class="icon-button"
+                        type="button"
+                        aria-label="Previous day"
+                    >
+                        &#8592;
+                    </button>
+
+                    <input
+                        id="dateJump"
+                        type="date"
+                        aria-label="Jump to date"
+                    >
+
+                    <button
+                        id="todayButton"
+                        class="secondary-button"
+                        type="button"
+                    >
+                        Today
+                    </button>
+
+                    <button
+                        id="nextDateButton"
+                        class="icon-button"
+                        type="button"
+                        aria-label="Next day"
+                    >
+                        &#8594;
+                    </button>
+
+                </div>
+
+
+                <!-- SEARCH STATUS -->
+                <div
+                    id="searchStatus"
+                    class="search-status"
+                    aria-live="polite"
+                ></div>
+
+
+                <!-- TIMELINE LIST -->
+                <div
+                    id="timeline"
+                    class="timeline-list"
+                    aria-live="polite"
+                >
+
+                    <div class="loading-message">
+                        Loading your timeline...
+                    </div>
+
+                </div>
+
+
+                <!-- TIMELINE NAVIGATION -->
+                <div class="timeline-footer">
+
+                    <button
+                        id="loadEarlierButton"
+                        class="secondary-button"
+                        type="button"
+                    >
+                        Load earlier dates
+                    </button>
+
+                </div>
+
+            </section>
+
+
+            <!-- ENTRY EDITOR PANEL -->
+            <section
+                class="editor-panel"
+                id="editorPanel"
+            >
+
+                <div class="editor-header">
+
+                    <div>
+                        <h2 id="editorTitle">Select a date</h2>
+
+                        <p
+                            id="editorSubtitle"
+                            class="editor-subtitle"
+                        >
+                            Choose a day from your timeline.
+                        </p>
+                    </div>
+
+                    <div
+                        id="saveStatus"
+                        class="save-status"
+                        aria-live="polite"
+                    >
+                        <span class="status-indicator"></span>
+                        <span id="saveStatusText">Ready</span>
+                    </div>
+
+                </div>
+
+
+                <!-- ENTRY TEXT AREA -->
+                <div class="editor-body">
+
+                    <textarea
+                        id="entryText"
+                        placeholder="What happened today?"
+                        spellcheck="true"
+                        disabled
+                        aria-label="Daily note"
+                    ></textarea>
+
+                    <div class="editor-footer">
+
+                        <span
+                            id="characterCount"
+                            class="character-count"
+                        >
+                            0 characters
+                        </span>
+
+                        <button
+                            id="deleteEntryButton"
+                            class="danger-button"
+                            type="button"
+                            disabled
+                        >
+                            Delete entry
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <!-- DELETE CONFIRMATION -->
+                <div
+                    id="deleteConfirmation"
+                    class="confirmation-panel"
+                    hidden
+                >
+
+                    <p>
+                        Are you sure you want to permanently delete
+                        this entry?
+                    </p>
+
+                    <div class="confirmation-actions">
+
+                        <button
+                            id="confirmDeleteButton"
+                            class="danger-button"
+                            type="button"
+                        >
+                            Delete permanently
+                        </button>
+
+                        <button
+                            id="cancelDeleteButton"
+                            class="secondary-button"
+                            type="button"
+                        >
+                            Cancel
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+        </main>
+
+
+        <!-- PRIVACY NOTICE -->
+        <footer class="app-footer">
+
+            <p>
+                Your entries are stored locally on this device.
+                Nothing is uploaded or synchronised.
+            </p>
+
+            <p>
+                Remember to export occasional backups.
+                Browser storage can be cleared.
+            </p>
+
+            <p class="version-label">
+                Daily Log · Local Edition
+            </p>
+
+        </footer>
+
+    </div>
+
+
+    <!-- JAVASCRIPT -->
+    <script src="db.js"></script>
+    <script src="app.js"></script>
+
+</body>
+</html>
