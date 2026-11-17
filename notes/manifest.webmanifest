@@ -1,0 +1,32 @@
+
+{
+  "id": "./",
+  "name": "Daily Log - Personal Timeline",
+  "short_name": "Daily Log",
+  "description": "A simple, private daily diary and timeline stored locally on your device.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#111820",
+  "background_color": "#111820",
+  "categories": [
+    "lifestyle",
+    "productivity",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
